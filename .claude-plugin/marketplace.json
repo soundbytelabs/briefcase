@@ -1,0 +1,16 @@
+{
+  "name": "briefcase",
+  "description": "Personal thought management — capture stray ideas, brief on topics, reorganize accumulated thinking",
+  "owner": {
+    "name": "Michael Skiles",
+    "email": "michael@soundbytelabs.net"
+  },
+  "plugins": [
+    {
+      "name": "briefcase",
+      "version": "0.2.0",
+      "description": "Personal thought management — capture stray ideas, brief on topics, reorganize accumulated thinking",
+      "source": "./plugins/briefcase"
+    }
+  ]
+}
