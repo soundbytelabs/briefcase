@@ -1,19 +1,20 @@
 {
   "name": "briefcase",
-  "version": "0.2.0",
-  "description": "Personal thought management — capture stray ideas, brief on topics, reorganize accumulated thinking",
+  "version": "0.3.1",
+  "description": "Personal thought capture and organization",
   "author": {
     "name": "Michael Skiles",
     "email": "michael@soundbytelabs.net"
   },
-  "repository": "https://github.com/mjrskiles/briefcase",
+  "repository": "https://github.com/soundbytelabs/briefcase",
   "license": "MIT",
   "keywords": [
     "briefcase",
     "thoughts",
     "capture",
     "knowledge",
-    "workflow"
+    "workflow",
+    "notes"
   ],
   "skills": "./skills"
 }

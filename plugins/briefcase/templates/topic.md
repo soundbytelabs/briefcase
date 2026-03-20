@@ -7,3 +7,5 @@
 ### {{DATE}}
 
 {{THOUGHT}}
+
+{{ADDITIONAL_COMMENTS}}

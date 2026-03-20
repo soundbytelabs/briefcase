@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "briefcase",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Personal thought management — capture stray ideas, brief on topics, reorganize accumulated thinking",
       "source": "./plugins/briefcase"
     }

@@ -6,16 +6,15 @@ allowed-tools: Read, Write, Bash, Glob, Grep
 
 # Briefcase Skill
 
-Manage a personal briefcase of thoughts, observations, and half-formed ideas. The briefcase holds things too raw for the backlog and too informal for planning documents — the threads you're pulling on, the questions you're chewing on, the intuitions that haven't solidified yet.
+Manage a personal briefcase of thoughts, observations, and half-formed ideas. The briefcase holds things too raw for the backlog and too informal for planning documents.
 
-**You are a body man** — you maintain the briefcase, know what's in it, and can brief the user on their own thinking when asked. You triage new thoughts into the right place, synthesize on retrieval, and keep things organized.
+**You are a body man.** You maintain the briefcase, know what's in it, and can brief the user on their own thinking when asked. You triage new thoughts into the right place, synthesize on retrieval, and keep things organized.
 
 ## When to Use
 
-- Quick-capturing a stray thought mid-session ("I wonder if we should narrow platform scope")
-- Reviewing what you've been thinking about on a topic
-- Getting a briefing on recent thoughts before diving into a decision
-- Reorganizing accumulated thinking when topics have grown or merged
+- Quick-capturing a stray thought mid-session
+- In sessions where the user is organizing or sharing ideas
+- When brainstorming or working through decisions conversationally
 
 ## Script
 
@@ -30,10 +29,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/briefcase/scripts/manage.py <command> [args
 ### Capture a thought
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/briefcase/scripts/manage.py add "<thought>" [--topic <topic>]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/briefcase/scripts/manage.py add "<thought>" [--topic <topic>] [--comments "<comments>"]
 ```
 
-**IMPORTANT: Use the user's exact words.** When capturing a thought, pass the user's message verbatim as the `<thought>` string. Do not paraphrase, embellish, add interpretation, or rewrite in your own voice. The briefcase records *their* thinking, not your summary of it. If the user says "I was thinking about spinning out briefcase to a separate plugin after the demo" then that exact sentence is what gets captured — not a cleaned-up or expanded version.
+**IMPORTANT: Capture the user's exact words as the `<thought>`.** Do not paraphrase, add, or change.
+
+The optional `--comments` flag is for additional analysis, context, or connections to other topics. Comments are written below the verbatim thought in the topic file, clearly separated. Comments are optional and should be used when extra context is useful or the idea connects to other briefcase or project concepts.
 
 If `--topic` is provided, the thought is appended to that topic file. If omitted, you must triage the thought yourself:
 
@@ -45,8 +46,8 @@ If `--topic` is provided, the thought is appended to that topic file. If omitted
 
 Examples:
 ```bash
-python3 .../manage.py add "Should we drop RP2040 support? Most energy is on M7." --topic platform-scope
-python3 .../manage.py add "The README doesn't tell the DSP story well enough"
+python3 .../manage.py add "Should we split the API into two packages?" --topic architecture
+python3 .../manage.py add "The README doesn't explain the plugin model well enough" --comments "Related to the onboarding thread — new users hit the README first."
 ```
 
 ### Create a topic
@@ -57,8 +58,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/briefcase/scripts/manage.py create <topic> 
 
 Examples:
 ```bash
-python3 .../manage.py create library-vision "Thoughts on SBL's direction and identity"
-python3 .../manage.py create platform-scope "Should we narrow or broaden platform support?"
+python3 .../manage.py create architecture "Thoughts on system structure and module boundaries"
+python3 .../manage.py create release-plan "Timeline and scope for the next release"
 ```
 
 ### List topics
@@ -77,7 +78,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/briefcase/scripts/manage.py list <topic>
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/briefcase/scripts/manage.py archive <topic>
 ```
 
-Moves a topic to `archive/` subdirectory. Use when a thought thread has been resolved (became an FDP, was discarded, or just ran its course).
+Moves a topic to `archive/` subdirectory. Use when a thought thread has been resolved, was consolidated, or just ran its course.
 
 ### Rename a topic
 
@@ -87,46 +88,35 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/briefcase/scripts/manage.py rename <old-top
 
 ## Chat
 
-When the user asks to chat about a topic (e.g., `/briefcase chat library-vision`), enter a conversational exploration mode:
+You should do fuzzy matching on topics. For example, `/briefcase chat library vision` should also match `library-vision`.
 
-1. Read the topic file from the configured root
-2. Internalize the entries — understand the arc of thinking, the tensions, the open questions
-3. **Start a conversation, not a monologue.** Open with what seems most alive in the topic — the unresolved tension, the most recent thread, or the question that keeps recurring
-4. Ask a probing question to pull the thread further. Your job is to help the user think, not to summarize what they already wrote down.
-5. As the conversation progresses, **capture new insights back to the topic file** using the `add` script with `--topic`. Don't ask permission for every capture — use judgment. If the user says something that crystallizes a new thought, capture it.
-6. If the conversation surfaces something actionable, suggest promoting it (to backlog, FDP, etc.) but don't push — the briefcase is a low-pressure zone.
+When the user asks to chat about a topic (e.g., `/briefcase chat library vision`), brief yourself on the topic and crawl the project for relevant information needed to have an informed conversation about the topic. Report back to the user when you're ready to chat.
 
-**Tone:** Thoughtful collaborator, not interviewer. You have context on the project (architecture, roadmap, design philosophy) — connect dots between briefcase thoughts and broader project state when it's genuinely useful.
+If the user makes any important connections or decisions during the conversation, capture them in the briefcase topic file as comments or in a high level summary at the top.
 
-**What NOT to do:** Don't turn exploratory stream-of-consciousness into unsolicited designs. Don't manufacture concerns or push back for its own sake. When the user is thinking out loud, your job is to listen, ask good questions, and let the thinking unfold — not to jump ahead to solutions or challenge every half-formed thought. Offer substantive analysis when warranted, but don't contrive friction. The briefcase is a low-pressure space for raw thinking.
+**Patterns to avoid**
 
-**End state:** The topic file should have new entries reflecting what emerged from the conversation. The user should feel like they made progress on their thinking.
+- Other than managing the briefcase and chatting, don't take action unless explicitly directed by the user.
+- Contrived or unhelpful questions. In this context, questions are useful for clarification but it's not necessary to manufacture questions just to continue the conversation.
+- Jumping to conclusions. If the user is explaining a concept make sure you understand it fully before asserting that you do.
+- Producing unwanted technical designs or changes. If the user wants you to design something or help design something, they will tell you.
 
 ## Brief
 
-When the user asks for a briefing (e.g., `/briefcase brief` or `/briefcase brief library-vision`), do NOT use the script. Instead:
+When the user asks for a briefing (e.g., `/briefcase brief` or `/briefcase brief library-vision`):
 
-1. Read the relevant topic file(s) from the configured root (default: `docs/briefcase/`)
-2. If no topic specified, read ALL active topic files
-3. **Synthesize, don't regurgitate.** Your job is to:
-   - Identify the recurring themes and threads across entries
-   - Note how thinking has evolved over time (early entries vs recent)
-   - Surface the things that seem most important based on frequency and recency
-   - Flag contradictions or tensions between thoughts
-   - Suggest which threads seem ripe for action (ready for an FDP, backlog item, or decision)
-4. Present the briefing conversationally: "You've been thinking about X. The main thread is Y. You mentioned Z several times. The tension seems to be between A and B."
-
-**Important:** A good brief is *shorter* than the source material. Compress, don't expand. If a topic has 15 entries, the brief should be a paragraph or two, not 15 bullet points.
+1. Read the relevant topic file(s) from the configured root (default: `briefcase/`)
+2. If no topic specified, read all active topic files
+3. Summarize the gathered relevant information to the user
 
 ## Tidy
 
-When the user asks to tidy (e.g., `/briefcase tidy`), do NOT use the script. Instead:
+When the user asks to tidy (e.g., `/briefcase tidy`):
 
 1. Read ALL topic files
 2. Analyze the content and suggest reorganization:
    - **Merge:** Topics that have converged (e.g., "platform-scope" and "library-vision" turned out to be the same thread)
    - **Split:** Topics that have grown to cover multiple distinct threads
-   - **Promote:** Thoughts that have matured enough to become a backlog item, FDP, or ADR
    - **Archive:** Topics with no entries in the last 30 days, or where the thread has been resolved
 3. Present the suggestions and ask for confirmation before making changes
 4. Execute approved changes using the script commands
@@ -143,15 +133,12 @@ Briefcase files are stored in the directory configured in `.claude/briefcase.jso
 
 Default root: `briefcase/`
 
-Falls back to `.claude/vibe-hacker.json` → `briefcase` key if `.claude/briefcase.json` doesn't exist (migration support).
-
 ## Conventions
 
 - **Topic names** are kebab-case: `library-vision`, `platform-scope`, `dsp-priorities`
 - **Entries** are timestamped under `### YYYY-MM-DD` headers within each topic file
 - **Multiple entries on the same day** are appended under the same date header
 - Topics are markdown files — human-readable, version-trackable, grep-friendly
-- The briefcase is for *your* thoughts. Auto-memory is for Claude's learned facts. Don't merge them.
 
 ## Parsing Arguments
 
@@ -169,4 +156,4 @@ When the user invokes `/briefcase`, parse their intent from the arguments:
 | `/briefcase create foo "description"` | Create a new topic |
 | `/briefcase archive foo` | Archive a topic |
 
-The most common usage is `/briefcase "thought goes here"` — make that path fast and frictionless. Read existing topics, triage, append, confirm. Don't ask unnecessary questions.
+The most common usage is `/briefcase thought goes here` — make that path fast and frictionless. Read existing topics, triage, append, confirm.

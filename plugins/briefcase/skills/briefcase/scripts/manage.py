@@ -6,7 +6,7 @@ thoughts, observations, and half-formed ideas.
 
 Usage:
     manage.py create <topic> "<description>"
-    manage.py add "<thought>" [--topic <topic>]
+    manage.py add "<thought>" [--topic <topic>] [--comments "<comments>"]
     manage.py list [<topic>]
     manage.py archive <topic>
     manage.py rename <old-topic> <new-topic>
@@ -19,37 +19,44 @@ import sys
 from datetime import date
 from pathlib import Path
 
+# --- Defaults ---
+
+CONFIG_DIR = ".claude"
+CONFIG_FILE = "briefcase.json"
+DEFAULT_ROOT = "briefcase"
+ARCHIVE_DIR = "archive"
+TOPIC_EXT = ".md"
+TOPIC_GLOB = f"*{TOPIC_EXT}"
+
+# Exit code when --topic is omitted and triage is needed
+EXIT_NEEDS_TRIAGE = 2
+
+# --- Markdown format ---
+
+TITLE_PREFIX = "# "
+ENTRIES_HEADER = "## Entries"
+DATE_PREFIX = "### "
+DATE_PATTERN = re.compile(rf"^{re.escape(DATE_PREFIX)}(\d{{4}}-\d{{2}}-\d{{2}})$")
+
 
 def find_project_root():
     """Walk up from CWD to find project root via config files."""
     p = Path.cwd()
     while p != p.parent:
-        # Check for standalone briefcase config first
-        if (p / ".claude" / "briefcase.json").exists():
-            return p
-        # Fallback to vibe-hacker config (migration support)
-        if (p / ".claude" / "vibe-hacker.json").exists():
+        if (p / CONFIG_DIR / CONFIG_FILE).exists():
             return p
         p = p.parent
     return Path.cwd()
 
 
 def load_config():
-    """Load briefcase config from .claude/briefcase.json or .claude/vibe-hacker.json."""
+    """Load briefcase config from .claude/briefcase.json."""
     root = find_project_root()
 
-    # Prefer standalone config
-    standalone = root / ".claude" / "briefcase.json"
-    if standalone.exists():
-        with open(standalone) as f:
+    config_path = root / CONFIG_DIR / CONFIG_FILE
+    if config_path.exists():
+        with open(config_path) as f:
             return json.load(f)
-
-    # Fallback to vibe-hacker config
-    legacy = root / ".claude" / "vibe-hacker.json"
-    if legacy.exists():
-        with open(legacy) as f:
-            full = json.load(f)
-            return full.get("briefcase", {})
 
     return {}
 
@@ -57,18 +64,18 @@ def load_config():
 def briefcase_root():
     """Get the briefcase root directory."""
     config = load_config()
-    root = config.get("root", "briefcase")
+    root = config.get("root", DEFAULT_ROOT)
     return find_project_root() / root
 
 
 def topic_path(name: str) -> Path:
     """Get path to a specific topic file."""
-    return briefcase_root() / f"{name}.md"
+    return briefcase_root() / f"{name}{TOPIC_EXT}"
 
 
 def archive_path(name: str) -> Path:
     """Get path to archived topic file."""
-    return briefcase_root() / "archive" / f"{name}.md"
+    return briefcase_root() / ARCHIVE_DIR / f"{name}{TOPIC_EXT}"
 
 
 # --- Topic file parsing ---
@@ -93,12 +100,12 @@ def parse_topic(path: Path) -> dict:
         stripped = line.strip()
 
         # Title
-        if stripped.startswith("# ") and not title:
-            title = stripped[2:].strip()
+        if stripped.startswith(TITLE_PREFIX) and not title:
+            title = stripped[len(TITLE_PREFIX):].strip()
             continue
 
         # Entries section
-        if stripped == "## Entries":
+        if stripped == ENTRIES_HEADER:
             in_entries = True
             continue
 
@@ -109,7 +116,7 @@ def parse_topic(path: Path) -> dict:
             continue
 
         # Date headers within entries
-        date_match = re.match(r"^### (\d{4}-\d{2}-\d{2})$", stripped)
+        date_match = DATE_PATTERN.match(stripped)
         if date_match:
             # Save previous entry
             if current_date:
@@ -134,13 +141,13 @@ def parse_topic(path: Path) -> dict:
 
 def write_topic(path: Path, title: str, description: str, entries: list):
     """Write a topic file from structured data."""
-    lines = [f"# {title}", ""]
+    lines = [f"{TITLE_PREFIX}{title}", ""]
     if description:
         lines.append(description)
-    lines.extend(["", "## Entries", ""])
+    lines.extend(["", ENTRIES_HEADER, ""])
 
     for entry in entries:
-        lines.append(f"### {entry['date']}")
+        lines.append(f"{DATE_PREFIX}{entry['date']}")
         lines.extend(entry["lines"])
         # Ensure blank line between entries
         if entry["lines"] and entry["lines"][-1].strip():
@@ -176,7 +183,7 @@ def cmd_add(args):
         # No topic specified — list existing topics so the agent can triage
         root = briefcase_root()
         if root.exists():
-            topics = sorted(f.stem for f in root.glob("*.md"))
+            topics = sorted(f.stem for f in root.glob(TOPIC_GLOB))
             if topics:
                 print("Existing topics (choose one or create new):")
                 for t in topics:
@@ -188,7 +195,7 @@ def cmd_add(args):
                 print("No topics exist yet. Create one first.")
         else:
             print("No briefcase directory yet. Create a topic first.")
-        sys.exit(2)  # Exit 2 = needs triage (not an error, just incomplete)
+        sys.exit(EXIT_NEEDS_TRIAGE)
 
     today = date.today().isoformat()
     data = parse_topic(path)
@@ -200,19 +207,25 @@ def cmd_add(args):
             today_entry = entry
             break
 
+    # Build the lines for this thought
+    thought_lines = [args.thought]
+    if args.comments:
+        thought_lines.append("")
+        thought_lines.append(args.comments)
+
     if today_entry:
         # Append to existing date
         # Add blank line before new thought if there's existing content
         content_lines = [l for l in today_entry["lines"] if l.strip()]
         if content_lines:
             today_entry["lines"].append("")
-        today_entry["lines"].append(args.thought)
+        today_entry["lines"].extend(thought_lines)
         today_entry["lines"].append("")
     else:
         # New date entry
         data["entries"].append({
             "date": today,
-            "lines": ["", args.thought, ""],
+            "lines": [""] + thought_lines + [""],
         })
 
     write_topic(path, data["title"], data["description"], data["entries"])
@@ -231,13 +244,13 @@ def cmd_list(args):
             sys.exit(1)
 
         data = parse_topic(path)
-        print(f"# {data['title']}")
+        print(f"{TITLE_PREFIX}{data['title']}")
         if data["description"]:
             print(f"\n{data['description']}")
         print(f"\n{len(data['entries'])} entries")
 
         for entry in data["entries"]:
-            print(f"\n### {entry['date']}")
+            print(f"\n{DATE_PREFIX}{entry['date']}")
             for line in entry["lines"]:
                 if line.strip():
                     print(f"  {line.strip()}")
@@ -247,7 +260,7 @@ def cmd_list(args):
             print("No briefcase found.")
             return
 
-        files = sorted(root.glob("*.md"))
+        files = sorted(root.glob(TOPIC_GLOB))
         if not files:
             print("No topics found.")
             return
@@ -268,9 +281,9 @@ def cmd_list(args):
                 print(f"    {desc}")
 
         # Check for archived topics
-        archive_dir = root / "archive"
+        archive_dir = root / ARCHIVE_DIR
         if archive_dir.exists():
-            archived = sorted(archive_dir.glob("*.md"))
+            archived = sorted(archive_dir.glob(TOPIC_GLOB))
             if archived:
                 print(f"\n  ({len(archived)} archived topics in archive/)")
 
@@ -324,8 +337,9 @@ def main():
 
     # add
     p = sub.add_parser("add", help="Add a thought")
-    p.add_argument("thought", help="The thought to capture")
+    p.add_argument("thought", help="The thought to capture (verbatim)")
     p.add_argument("--topic", "-t", default=None, help="Target topic (omit to list existing)")
+    p.add_argument("--comments", "-c", default=None, help="Additional analysis or context (optional)")
 
     # list
     p = sub.add_parser("list", help="List topics or show a topic")
